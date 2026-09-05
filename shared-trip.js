@@ -1,0 +1,53 @@
+const days=[
+{date:'11월 13일 · 금',title:'빈 도착',rows:[['11:55','인천국제공항','대한항공 직항 출발'],['16:55','빈 국제공항','도착 · 호텔 이동'],['저녁','빈 시내','체크인 · 가벼운 산책']]},
+{date:'11월 14일 · 토',title:'빈 예술 산책',rows:[['오전','빈 시내','카페 · 미술관 산책'],['오후','빈 중심가','여유로운 도보 여행'],['저녁','빈','저녁 식사']]},
+{date:'11월 15일 · 일',title:'쇤브룬과 클래식',rows:[['오전','쇤브룬 궁전','궁전 및 정원 관람'],['오후','빈 시내','카페 · 자유시간'],['저녁','빈','클래식 공연']]},
+{date:'11월 16일 · 월',title:'잘츠카머구트 이동',rows:[['오전','빈','체크아웃 · 이동 시작'],['오후','체스키 크룸로프','마을 산책'],['저녁','잘츠카머구트','숙소 체크인']]},
+{date:'11월 17일 · 화',title:'고사우와 할슈타트',rows:[['오전','고사우 호수','호수 산책 · 사진'],['오후','할슈타트','중앙광장 · 호숫가 산책'],['저녁','할슈타트','여유로운 저녁']]},
+{date:'11월 18일 · 수',title:'체스키 크룸로프 → 프라하',rows:[['오전','체스키 크룸로프','구시가지 산책'],['오후','프라하','이동 · 호텔 체크인'],['저녁','프라하','가벼운 야경 산책']]},
+{date:'11월 19일 · 목',title:'프라하 성과 구시가지',rows:[['오전','프라하 성','성 비투스 대성당'],['오후','구시가지 광장','천문시계 · 카페'],['저녁','블타바 강변','야경 감상']]},
+{date:'11월 20일 · 금',title:'프라하 도보 여행',rows:[['오전','구시가지','자유 산책'],['오후','프라하 시내','쇼핑 · 카페'],['저녁','프라하','마지막 저녁']]},
+{date:'11월 21일 · 토',title:'프라하에서 귀국',rows:[['오전','호텔','체크아웃 · 짐 보관'],['오후','프라하 공항','공항 이동 · 출국 준비'],['18:30','프라하 공항','대한항공 직항 출발']]}
+];
+const planKey='central-europe-2026-schedule-v3',key='central-europe-2026-expenses';
+const readLocal=(k,fallback)=>{try{return JSON.parse(localStorage.getItem(k))??fallback}catch{return fallback}};
+const legacyPlans=readLocal(planKey,{}),legacyExpenses=readLocal(key,[]);
+const state=days.map(d=>({rows:d.rows.map(r=>({time:r[0],place:r[1],note:r[2]})),revision:0}));
+const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let selected=Number(localStorage.getItem('central-europe-2026-selected-day')||1);if(!Number.isInteger(selected)||selected<1||selected>9)selected=1;
+const tabs=document.querySelector('#day-tabs'),planner=document.querySelector('#planner');
+const form=document.querySelector('#expense-form'),day=document.querySelector('#expense-day'),amount=document.querySelector('#expense-amount'),person=document.querySelector('#expense-person'),note=document.querySelector('#expense-note'),list=document.querySelector('#expense-list');
+const status=document.querySelector('#sync-status'),retry=document.querySelector('#retry-sync'),importButton=document.querySelector('#import-local');
+const money=n=>`€${n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+let expenses=[],db,api,ready=false,pending=0,failed=false,expenseReady=false,planReady=false,editing=null;
+const planDocs=new Map();
+function message(text,error=false){status.textContent=text;status.parentElement.dataset.error=String(error)}
+function statusUpdate(){if(failed)return;message(!navigator.onLine?'인터넷 연결 끊김 · 다시 연결해 주세요':pending?'공유 저장 중…':ready?'● 실시간 공유 중 · 저장 완료':'공유 기록 불러오는 중…')}
+function lock(){document.querySelectorAll('#expense-form input,#expense-form select,#expense-form button,#planner input,#planner textarea,#planner button,#expense-list button,#import-local').forEach(el=>el.disabled=!ready||pending>0||!navigator.onLine)}
+function error(err){console.error(err);failed=true;message(err?.message==='conflict'?'다른 사람이 먼저 수정했어요. 최신 일정을 확인하고 다시 입력해 주세요.':'공유 저장에 실패했어요. 입력 내용은 남아 있습니다. 연결 상태를 확인해 주세요.',true);retry.hidden=false}
+async function write(action){if(!ready||!navigator.onLine)return;pending++;lock();failed=false;statusUpdate();try{await action();retry.hidden=true}catch(e){error(e);throw e}finally{pending--;lock();statusUpdate()}}
+function renderTabs(){tabs.innerHTML=days.map((d,i)=>`<button class="${selected===i+1?'active':''}" data-day="${i+1}">DAY ${i+1}<small>${d.date.replace('11월 ','')}</small></button>`).join('')}function renderDay(){const i=selected-1,d=days[i],s=state[i];planner.innerHTML=`<header class="day-head"><div><div class="day-kicker">DAY ${selected} · ${d.date}</div><h3>${d.title}</h3><p>시간과 장소를 직접 입력해 나만의 확정 일정으로 완성하세요.</p></div><a class="ghost-link" href="personal-itinerary-images/day-${selected}.png" target="_blank">포스터 원본 ↗</a></header><div class="day-layout"><div><div class="schedule-label"><b>시간별 일정</b><span class="saved">● 함께 보는 일정</span></div><div class="rows">${s.rows.map((r,n)=>`<div class="plan-row" data-row="${n}"><input data-field="time" value="${escape(r.time)}" placeholder="시간"><input data-field="place" value="${escape(r.place)}" placeholder="장소"><textarea data-field="note" placeholder="일정 내용">${escape(r.note)}</textarea><button class="remove" title="일정 삭제" aria-label="일정 삭제">×</button></div>`).join('')}</div><button class="add-row" id="add-row">＋ 일정 추가</button><p class="hint">수정 후 다른 칸을 누르면 공유 저장됩니다. 같은 일정을 동시에 수정하면 먼저 저장된 내용을 확인해 주세요.</p></div><aside class="poster-pane"><img src="personal-itinerary-images/day-${selected}.png" alt="DAY ${selected} 일정 포스터"><a href="personal-itinerary-images/day-${selected}.png" target="_blank">포스터 크게 보기 ↗</a></aside></div>`;document.querySelector('#all-posters').href=`personal-itinerary-images/day-${selected}.png`}
+
+const originalRenderDay=renderDay;
+renderDay=function(){originalRenderDay();lock()};
+function renderExpenses(){const total=expenses.reduce((sum,x)=>sum+x.amount,0);document.querySelector('#spent').textContent=money(total);document.querySelector('#count').textContent=`${expenses.length}건`;list.innerHTML=expenses.length?expenses.map(x=>`<li><small>DAY ${escape(x.day)}</small><small>${escape(x.person||'미지정')}</small><span>${escape(x.note||'기타 지출')}</span><b>${money(x.amount)}</b><button type="button" data-id="${escape(x.id)}">삭제</button></li>`).join(''):'<li class="empty">아직 기록한 지출이 없어요. 첫 지출부터 적어보세요.</li>';lock()}
+day.innerHTML=days.map((d,i)=>`<option value="${i+1}">DAY ${i+1} · ${d.date} · ${d.title}</option>`).join('');
+tabs.addEventListener('click',e=>{const b=e.target.closest('[data-day]');if(!b)return;selected=Number(b.dataset.day);localStorage.setItem('central-europe-2026-selected-day',selected);editing=null;renderTabs();renderDay()});
+planner.addEventListener('focusin',e=>{if(e.target.matches('input,textarea'))editing={day:selected,revision:state[selected-1].revision,rows:structuredClone(state[selected-1].rows)}});
+async function saveDay(n,rows,revision){await write(()=>api.runTransaction(db,async tx=>{const ref=api.doc(db,'trips','europe-2026','days',String(n));const snapshot=await tx.get(ref);if((snapshot.data()?.revision||0)!==revision)throw new Error('conflict');tx.set(ref,{rows,revision:revision+1});}));}
+planner.addEventListener('change',async e=>{const row=e.target.closest('.plan-row');if(!row||!editing)return;const draft=editing;draft.rows[Number(row.dataset.row)][e.target.dataset.field]=e.target.value;try{await saveDay(draft.day,draft.rows,draft.revision);editing=null;renderDay()}catch{editing=null;if(failed&&status.textContent.startsWith('다른 사람'))renderDay()}});
+planner.addEventListener('click',async e=>{const row=e.target.closest('.plan-row');if(!e.target.closest('#add-row')&&!(row&&e.target.closest('.remove')))return;const n=selected,base=state[n-1],rows=structuredClone(base.rows);if(e.target.closest('#add-row')){if(rows.length>=60){message('하루 일정은 60개까지 추가할 수 있어요.',true);return}rows.push({time:'',place:'',note:''})}else rows.splice(Number(row.dataset.row),1);try{await saveDay(n,rows,base.revision);renderDay()}catch{}});
+form.addEventListener('submit',async e=>{e.preventDefault();const value=Number(amount.value);if(!Number.isFinite(value)||value<=0||value>1000000||!['천가네','문가네'].includes(person.value))return;const record={day:day.value,amount:value,person:person.value,note:note.value.trim(),createdAt:Date.now(),deleted:false};try{await write(()=>api.setDoc(api.doc(api.collection(db,'trips','europe-2026','expenses')),record));form.reset()}catch{}});
+list.addEventListener('click',async e=>{const b=e.target.closest('[data-id]');if(!b)return;try{await write(()=>api.updateDoc(api.doc(db,'trips','europe-2026','expenses',b.dataset.id),{deleted:true}))}catch{}});
+importButton.hidden=!(legacyExpenses.length||Object.keys(legacyPlans).length)||readLocal('central-europe-2026-imported',false);
+importButton.addEventListener('click',async()=>{try{await write(async()=>{for(let i=0;i<legacyExpenses.length;i++){const x=legacyExpenses[i];if(!Number.isFinite(x.amount)||x.amount<=0)continue;const record={day:String(x.day),amount:x.amount,person:String(x.person||'미지정').slice(0,30),note:String(x.note||'').slice(0,80),createdAt:i,deleted:false};const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(record)));const id='import-'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');await api.runTransaction(db,async tx=>{const ref=api.doc(db,'trips','europe-2026','expenses',id);if(!(await tx.get(ref)).exists())tx.set(ref,record)})}for(const [n,value]of Object.entries(legacyPlans)){if(!/^[1-9]$/.test(n)||!Array.isArray(value.rows))continue;await api.runTransaction(db,async tx=>{const ref=api.doc(db,'trips','europe-2026','days',n);if(!(await tx.get(ref)).exists())tx.set(ref,{rows:value.rows.slice(0,60),revision:1})})}localStorage.setItem('central-europe-2026-imported','true');importButton.hidden=true});message('기존 기록을 가져왔어요. 이미 공유된 일정은 유지했습니다.')}catch{}});
+retry.addEventListener('click',()=>location.reload());
+window.addEventListener('offline',()=>{lock();statusUpdate()});window.addEventListener('online',()=>{lock();statusUpdate()});
+renderTabs();renderDay();renderExpenses();lock();
+try{
+const [{initializeApp},firestore]=await Promise.all([import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')]);api=firestore;
+db=api.getFirestore(initializeApp({apiKey:'AIzaSyA_g9BHd2M6pGEpUo1SOJsJcQm8O4zANuQ',authDomain:'europe-trip-family.firebaseapp.com',projectId:'europe-trip-family',appId:'1:719844999257:web:65b751aa6e607732b27148'}));
+const received=()=>{ready=expenseReady&&planReady;lock();statusUpdate()};
+api.onSnapshot(api.collection(db,'trips','europe-2026','expenses'),{includeMetadataChanges:true},snap=>{expenses=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!x.deleted).sort((a,b)=>b.createdAt-a.createdAt||a.id.localeCompare(b.id));expenseReady=!snap.metadata.fromCache;renderExpenses();received()},error);
+api.onSnapshot(api.collection(db,'trips','europe-2026','days'),{includeMetadataChanges:true},snap=>{snap.docs.forEach(d=>{const n=Number(d.id);if(n>=1&&n<=9){state[n-1]=d.data();planDocs.set(n,true)}});planReady=!snap.metadata.fromCache;if(!planner.contains(document.activeElement))renderDay();received()},error);
+}catch(e){error(e)}
