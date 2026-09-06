@@ -7,8 +7,8 @@ const points={vienna:[48.2082,16.3738],linz:[48.3069,14.2858],gosau:[47.584,13.5
 const legs=[
 {points:[points.vienna,points.linz],color:'#245b43',label:'16일 · 기차',dash:null},
 {points:[points.linz,points.gosau,points.hallstatt],color:'#267a98',label:'16–17일 · 렌터카',dash:null},
-{points:[points.hallstatt,points.vienna],color:'#795c9c',label:'18일 · 렌터카 반납 후 기차 (반납 위치 미정)',dash:'9 7'},
-{points:[points.vienna,points.prague],color:'#b37925',label:'비엔나 → 프라하 · 이동 날짜·교통편 미정',dash:'3 10'}
+{points:[points.hallstatt,points.linz],color:'#795c9c',label:'18일 · 린츠로 이동 후 렌터카 반납',dash:'9 7'},
+{points:[points.linz,points.prague],color:'#b37925',label:'18일 · 린츠 → 프라하 기차 (시각·편명 미정)',dash:null}
 ];
 const map=L.map(el,{scrollWheelZoom:false,zoomControl:true});
 map.zoomControl.setPosition('topright');
@@ -17,10 +17,10 @@ tiles.on('tileerror',()=>{message.textContent='배경 지도 연결이 원활하
 tiles.on('load',()=>{message.textContent='도시를 누르면 방문 날짜를 볼 수 있어요. 확대해서 호수 지역도 살펴보세요.'});
 const lines=legs.map(leg=>L.polyline(leg.points,{color:leg.color,weight:4,opacity:.85,dashArray:leg.dash}).addTo(map).bindPopup(leg.label));
 const labels=[
-{p:points.vienna,number:'1 · 4',name:'빈 · 비엔나',detail:'11월 13–15일 도시 여행<br>16일 기차로 린츠 이동<br>18일 렌터카 반납 후 기차로 복귀',day:1,direction:'right'},
-{p:points.linz,number:'2',name:'린츠',detail:'11월 16일 · 기차 도착 후 렌터카 인수<br>인수 업체·장소·시간 미정',day:4,direction:'top'},
-{p:points.hallstatt,number:'3',name:'고사우 · 할슈타트',detail:'11월 16–17일 · 렌터카로 호수 지역 여행<br>18일 반납 위치와 출발역은 미정',day:5,direction:'bottom'},
-{p:points.prague,number:'5',name:'프라하',detail:'11월 19–21일 · 기존 프라하 일정<br>비엔나에서 넘어오는 교통편·날짜 미정',day:7,direction:'right'}
+{p:points.vienna,number:'1',name:'빈 · 비엔나',detail:'11월 13–15일 도시 여행<br>16일 기차로 린츠 이동',day:1,direction:'right'},
+{p:points.linz,number:'2 · 4',name:'린츠',detail:'11월 16일 · 기차 도착 후 렌터카 인수<br>18일 린츠에서 반납 후 프라하행 기차 탑승',day:4,direction:'top'},
+{p:points.hallstatt,number:'3',name:'고사우 · 할슈타트',detail:'11월 16–17일 · 렌터카로 호수 지역 여행<br>18일 린츠로 돌아가 렌터카 반납',day:5,direction:'bottom'},
+{p:points.prague,number:'5',name:'프라하',detail:'11월 18일 · 린츠에서 기차로 도착<br>19–21일 프라하 여행 · 열차 시각 미정',day:6,direction:'right'}
 ];
 labels.forEach(stop=>L.marker(stop.p,{icon:L.divIcon({className:'journey-pin',html:`<span>${stop.number}</span>`,iconSize:[36,36],iconAnchor:[18,18]}),title:stop.name,alt:stop.name}).addTo(map).bindTooltip(stop.name,{permanent:true,direction:stop.direction,offset:[0,stop.direction==='bottom'?14:0],className:'journey-label'}).bindPopup(`<strong>${stop.name}</strong><p>${stop.detail}</p><a href="planner.html?day=${stop.day}">상세 일정 보기 ↗</a>`));
 const gosau=L.circleMarker(points.gosau,{radius:5,color:'#267a98',fillColor:'#fff',fillOpacity:1,weight:2}).bindTooltip('고사우',{direction:'left'}).bindPopup('고사우 · 11월 17일 호수 산책');

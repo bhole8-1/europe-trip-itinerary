@@ -1,4 +1,4 @@
-import {days,firebaseConfig} from './trip-data.js?v=overview-1';
+import {days,firebaseConfig} from './trip-data.js?v=prague-1';
 const planKey='central-europe-2026-schedule-v3',key='central-europe-2026-expenses';
 const readLocal=(k,fallback)=>{try{return JSON.parse(localStorage.getItem(k))??fallback}catch{return fallback}};
 const legacyPlans=readLocal(planKey,{}),legacyExpenses=readLocal(key,[]);
