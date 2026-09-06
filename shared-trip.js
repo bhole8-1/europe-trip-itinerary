@@ -1,20 +1,10 @@
-const days=[
-{date:'11월 13일 · 금',title:'빈 도착',rows:[['11:55','인천국제공항','대한항공 직항 출발'],['16:55','빈 국제공항','도착 · 호텔 이동'],['저녁','빈 시내','체크인 · 가벼운 산책']]},
-{date:'11월 14일 · 토',title:'빈 예술 산책',rows:[['오전','빈 시내','카페 · 미술관 산책'],['오후','빈 중심가','여유로운 도보 여행'],['저녁','빈','저녁 식사']]},
-{date:'11월 15일 · 일',title:'쇤브룬과 클래식',rows:[['오전','쇤브룬 궁전','궁전 및 정원 관람'],['오후','빈 시내','카페 · 자유시간'],['저녁','빈','클래식 공연']]},
-{date:'11월 16일 · 월',title:'잘츠카머구트 이동',rows:[['오전','빈','체크아웃 · 이동 시작'],['오후','체스키 크룸로프','마을 산책'],['저녁','잘츠카머구트','숙소 체크인']]},
-{date:'11월 17일 · 화',title:'고사우와 할슈타트',rows:[['오전','고사우 호수','호수 산책 · 사진'],['오후','할슈타트','중앙광장 · 호숫가 산책'],['저녁','할슈타트','여유로운 저녁']]},
-{date:'11월 18일 · 수',title:'렌터카 반납 → 비엔나',rows:[['오전 · 시간 미정','렌터카 반납','반납 후 기차역 이동 · 반납 지점·시간 추후 확정'],['반납 후 · 시간 미정','기차로 비엔나 이동','출발역·열차 시각 추후 확정'],['비엔나 도착 후','비엔나','이후 세부 일정 추후 확정']]},
-{date:'11월 19일 · 목',title:'프라하 성과 구시가지',rows:[['오전','프라하 성','성 비투스 대성당'],['오후','구시가지 광장','천문시계 · 카페'],['저녁','블타바 강변','야경 감상']]},
-{date:'11월 20일 · 금',title:'프라하 도보 여행',rows:[['오전','구시가지','자유 산책'],['오후','프라하 시내','쇼핑 · 카페'],['저녁','프라하','마지막 저녁']]},
-{date:'11월 21일 · 토',title:'프라하에서 귀국',rows:[['오전','호텔','체크아웃 · 짐 보관'],['오후','프라하 공항','공항 이동 · 출국 준비'],['18:30','프라하 공항','대한항공 직항 출발']]}
-];
+import {days,firebaseConfig} from './trip-data.js?v=overview-1';
 const planKey='central-europe-2026-schedule-v3',key='central-europe-2026-expenses';
 const readLocal=(k,fallback)=>{try{return JSON.parse(localStorage.getItem(k))??fallback}catch{return fallback}};
 const legacyPlans=readLocal(planKey,{}),legacyExpenses=readLocal(key,[]);
 const state=days.map(d=>({rows:d.rows.map(r=>({time:r[0],place:r[1],note:r[2]})),revision:0}));
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let selected=Number(localStorage.getItem('central-europe-2026-selected-day')||1);if(!Number.isInteger(selected)||selected<1||selected>9)selected=1;
+let selected=Number(new URLSearchParams(location.search).get('day')||localStorage.getItem('central-europe-2026-selected-day')||1);if(!Number.isInteger(selected)||selected<1||selected>9)selected=1;
 const tabs=document.querySelector('#day-tabs'),planner=document.querySelector('#planner');
 const form=document.querySelector('#expense-form'),day=document.querySelector('#expense-day'),amount=document.querySelector('#expense-amount'),person=document.querySelector('#expense-person'),note=document.querySelector('#expense-note'),list=document.querySelector('#expense-list');
 const status=document.querySelector('#sync-status'),retry=document.querySelector('#retry-sync'),importButton=document.querySelector('#import-local');
@@ -46,7 +36,7 @@ window.addEventListener('offline',()=>{lock();statusUpdate()});window.addEventLi
 renderTabs();renderDay();renderExpenses();lock();
 try{
 const [{initializeApp},firestore]=await Promise.all([import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')]);api=firestore;
-db=api.getFirestore(initializeApp({apiKey:'AIzaSyA_g9BHd2M6pGEpUo1SOJsJcQm8O4zANuQ',authDomain:'europe-trip-family.firebaseapp.com',projectId:'europe-trip-family',appId:'1:719844999257:web:65b751aa6e607732b27148'}));
+db=api.getFirestore(initializeApp(firebaseConfig));
 const received=()=>{ready=expenseReady&&planReady;lock();statusUpdate()};
 api.onSnapshot(api.collection(db,'trips','europe-2026','expenses'),{includeMetadataChanges:true},snap=>{expenses=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!x.deleted).sort((a,b)=>b.createdAt-a.createdAt||a.id.localeCompare(b.id));expenseReady=!snap.metadata.fromCache;renderExpenses();received()},error);
 api.onSnapshot(api.collection(db,'trips','europe-2026','days'),{includeMetadataChanges:true},snap=>{snap.docs.forEach(d=>{const n=Number(d.id);if(n>=1&&n<=9){state[n-1]=d.data();planDocs.set(n,true)}});planReady=!snap.metadata.fromCache;if(!planner.contains(document.activeElement))renderDay();received()},error);
