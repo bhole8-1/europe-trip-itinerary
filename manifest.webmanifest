@@ -1,0 +1,22 @@
+{
+  "id": "./",
+  "name": "천가네 문가네 · 유럽 여행",
+  "short_name": "유럽여행",
+  "description": "함께 보는 중부유럽 여행 일정, 지도와 경비",
+  "lang": "ko",
+  "start_url": "./posters.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3eb",
+  "theme_color": "#214f3e",
+  "prefer_related_applications": false,
+  "icons": [
+    {"src": "icons/app-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ],
+  "shortcuts": [
+    {"name": "전체 일정과 지도", "short_name": "전체 일정", "url": "./posters.html"},
+    {"name": "여행 경비 기록", "short_name": "여행 경비", "url": "./planner.html#expenses"}
+  ]
+}
