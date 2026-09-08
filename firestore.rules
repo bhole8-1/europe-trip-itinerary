@@ -1,6 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /trips/europe-2026/tickets/{id} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['category','title','date','time','place','status','url','memo','revision','deleted','updatedAt'])
+        && request.resource.data.category in ['항공','숙소','기차','렌터카','입장권 · 공연','기타']
+        && request.resource.data.status in ['확인 필요','예약 전','예약 완료']
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100
+        && request.resource.data.date is string && request.resource.data.date.matches('2026-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.time is string && request.resource.data.time.size() <= 100
+        && request.resource.data.place is string && request.resource.data.place.size() <= 200
+        && request.resource.data.url is string && request.resource.data.url.size() <= 2000
+        && (request.resource.data.url == '' || request.resource.data.url.matches('https?://.*'))
+        && request.resource.data.memo is string && request.resource.data.memo.size() <= 1000
+        && request.resource.data.revision is int && request.resource.data.revision > 0
+        && request.resource.data.deleted is bool && request.resource.data.updatedAt is number;
+    }
     match /trips/europe-2026/expenses/{id} {
       allow read: if true;
       allow create, update: if request.resource.data.keys().hasOnly(['day','amount','person','note','createdAt','deleted'])
