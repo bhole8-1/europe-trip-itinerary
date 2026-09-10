@@ -1,5 +1,5 @@
-import {firebaseConfig} from './trip-data.js?v=salzburg-1';
-import {countdown,escapeHTML as esc,safeLink,categories,statuses,mergeTickets,validateTicket} from './travel-extras-core.js?v=1';
+import {firebaseConfig} from './trip-data.js?v=vienna-rental-2';
+import {countdown,escapeHTML as esc,safeLink,categories,statuses,mergeTickets,validateTicket} from './travel-extras-core.js?v=2';
 function updateCountdown(){const d=countdown();document.querySelector('#departure-count').textContent=d.label;document.querySelector('#departure-message').textContent=d.message}
 updateCountdown();setInterval(updateCountdown,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateCountdown()});
 const grid=document.querySelector('#reservation-grid'),dialog=document.querySelector('#reservation-dialog'),form=document.querySelector('#reservation-form'),status=document.querySelector('#reservation-status'),formMessage=document.querySelector('#reservation-form-message'),retry=document.querySelector('#reservation-retry');
