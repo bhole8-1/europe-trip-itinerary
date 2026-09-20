@@ -8,7 +8,12 @@ let selected=Number(new URLSearchParams(location.search).get('day')||localStorag
 const tabs=document.querySelector('#day-tabs'),planner=document.querySelector('#planner');
 const form=document.querySelector('#expense-form'),day=document.querySelector('#expense-day'),amount=document.querySelector('#expense-amount'),person=document.querySelector('#expense-person'),note=document.querySelector('#expense-note'),list=document.querySelector('#expense-list');
 const status=document.querySelector('#sync-status'),retry=document.querySelector('#retry-sync'),importButton=document.querySelector('#import-local');
-const money=n=>`€${n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+const currencies=['KRW','EUR','CZK'];
+const currency=document.querySelector('#expense-currency'),expenseFilter=document.querySelector('#expense-filter');
+const money=(n,c='EUR')=>new Intl.NumberFormat('ko-KR',{style:'currency',currency:c,minimumFractionDigits:c==='KRW'?0:2,maximumFractionDigits:c==='KRW'?0:2}).format(n);
+function amountSettings(){amount.step=currency.value==='KRW'?'1':'0.01';amount.min=currency.value==='KRW'?'1':'0.01';amount.max=currency.value==='KRW'?'1000000000':'1000000';amount.placeholder='금액';amount.setCustomValidity('')}
+currency.addEventListener('change',amountSettings);amount.addEventListener('input',()=>amount.setCustomValidity(''));
+expenseFilter.addEventListener('change',renderExpenses);
 let expenses=[],db,api,ready=false,pending=0,failed=false,expenseReady=false,planReady=false,editing=null;
 const planDocs=new Map();
 function message(text,error=false){status.textContent=text;status.parentElement.dataset.error=String(error)}
@@ -20,14 +25,26 @@ function renderTabs(){tabs.innerHTML=days.map((d,i)=>`<button class="${selected=
 
 const originalRenderDay=renderDay;
 renderDay=function(){originalRenderDay();lock()};
-function renderExpenses(){const total=expenses.reduce((sum,x)=>sum+x.amount,0);document.querySelector('#spent').textContent=money(total);document.querySelector('#count').textContent=`${expenses.length}건`;list.innerHTML=expenses.length?expenses.map(x=>`<li><small>DAY ${escape(x.day)}</small><small>${escape(x.person||'미지정')}</small><span>${escape(x.note||'기타 지출')}</span><b>${money(x.amount)}</b><button type="button" data-id="${escape(x.id)}">삭제</button></li>`).join(''):'<li class="empty">아직 기록한 지출이 없어요. 첫 지출부터 적어보세요.</li>';lock()}
-day.innerHTML=days.map((d,i)=>`<option value="${i+1}">DAY ${i+1} · ${d.date} · ${d.title}</option>`).join('');
+function renderExpenses(){
+ const shown=expenses.filter(x=>expenseFilter.value==='pre'?x.day==='pre':expenseFilter.value==='trip'?x.day!=='pre':true);
+ const totals={KRW:0,EUR:0,CZK:0};shown.forEach(x=>{const c=x.currency||'EUR';if(currencies.includes(c))totals[c]+=Math.round(x.amount*(c==='KRW'?1:100))});
+ document.querySelector('#spent').innerHTML=currencies.map(c=>'<div><small>'+({KRW:'원화',EUR:'유로',CZK:'체코 코루나'}[c])+'</small><strong>'+money(totals[c]/(c==='KRW'?1:100),c)+'</strong></div>').join('');
+ document.querySelector('#count').textContent=shown.length+'건';
+ list.innerHTML=shown.length?shown.map(x=>`<li><small>${x.day==='pre'?'여행 전':'DAY '+escape(x.day)}</small><small>${escape(x.person||'미지정')}</small><span>${escape(x.note||'기타 지출')}</span><b>${money(x.amount,x.currency||'EUR')}</b><button type="button" data-id="${escape(x.id)}">삭제</button></li>`).join(''):'<li class="empty">이 구분에 기록한 지출이 없어요.</li>';lock()
+}
+
+day.innerHTML='<option value="pre">여행 전 지출 · 항공권, 숙소 등</option>'+days.map((d,i)=>`<option value="${i+1}">DAY ${i+1} · ${d.date} · ${d.title}</option>`).join('');
 tabs.addEventListener('click',e=>{const b=e.target.closest('[data-day]');if(!b)return;selected=Number(b.dataset.day);localStorage.setItem('central-europe-2026-selected-day',selected);editing=null;renderTabs();renderDay()});
 planner.addEventListener('focusin',e=>{if(e.target.matches('input,textarea'))editing={day:selected,revision:state[selected-1].revision,rows:structuredClone(state[selected-1].rows)}});
 async function saveDay(n,rows,revision){await write(()=>api.runTransaction(db,async tx=>{const ref=api.doc(db,'trips','europe-2026','days',String(n));const snapshot=await tx.get(ref);if((snapshot.data()?.revision||0)!==revision)throw new Error('conflict');tx.set(ref,{rows,revision:revision+1});}));}
 planner.addEventListener('change',async e=>{const row=e.target.closest('.plan-row');if(!row||!editing)return;const draft=editing;draft.rows[Number(row.dataset.row)][e.target.dataset.field]=e.target.value;try{await saveDay(draft.day,draft.rows,draft.revision);editing=null;renderDay()}catch{editing=null;if(failed&&status.textContent.startsWith('다른 사람'))renderDay()}});
 planner.addEventListener('click',async e=>{const row=e.target.closest('.plan-row');if(!e.target.closest('#add-row')&&!(row&&e.target.closest('.remove')))return;const n=selected,base=state[n-1],rows=structuredClone(base.rows);if(e.target.closest('#add-row')){if(rows.length>=60){message('하루 일정은 60개까지 추가할 수 있어요.',true);return}rows.push({time:'',place:'',note:''})}else rows.splice(Number(row.dataset.row),1);try{await saveDay(n,rows,base.revision);renderDay()}catch{}});
-form.addEventListener('submit',async e=>{e.preventDefault();const value=Number(amount.value);if(!Number.isFinite(value)||value<=0||value>1000000||!['천가네','문가네'].includes(person.value))return;const record={day:day.value,amount:value,person:person.value,note:note.value.trim(),createdAt:Date.now(),deleted:false};try{await write(()=>api.setDoc(api.doc(api.collection(db,'trips','europe-2026','expenses')),record));form.reset()}catch{}});
+form.addEventListener('submit',async e=>{e.preventDefault();if(!ready||pending||!navigator.onLine)return;const value=Number(amount.value),c=currency.value,scale=c==='KRW'?1:100;
+ if(!currencies.includes(c)||!['pre','1','2','3','4','5','6','7','8','9'].includes(day.value)||!Number.isFinite(value)||value<=0||value>(c==='KRW'?1000000000:1000000)||Math.abs(value*scale-Math.round(value*scale))>0.00001){amount.setCustomValidity(c==='KRW'?'원화는 1원 단위로 입력해 주세요.':'금액은 소수점 둘째 자리까지 입력해 주세요.');amount.reportValidity();return}
+ if(!['천가네','문가네'].includes(person.value)||!form.reportValidity())return;
+ const selectedDay=day.value,record={day:selectedDay,currency:c,amount:Math.round(value*scale)/scale,person:person.value,note:note.value.trim(),createdAt:Date.now(),deleted:false};
+ try{await write(()=>api.setDoc(api.doc(api.collection(db,'trips','europe-2026','expenses')),record));form.reset();day.value=selectedDay;currency.value=c;amountSettings();expenseFilter.value=selectedDay==='pre'?'pre':'trip';renderExpenses()}catch{}});
+
 list.addEventListener('click',async e=>{const b=e.target.closest('[data-id]');if(!b)return;try{await write(()=>api.updateDoc(api.doc(db,'trips','europe-2026','expenses',b.dataset.id),{deleted:true}))}catch{}});
 importButton.hidden=!(legacyExpenses.length||Object.keys(legacyPlans).length)||readLocal('central-europe-2026-imported',false);
 importButton.addEventListener('click',async()=>{try{await write(async()=>{for(let i=0;i<legacyExpenses.length;i++){const x=legacyExpenses[i];if(!Number.isFinite(x.amount)||x.amount<=0)continue;const record={day:String(x.day),amount:x.amount,person:String(x.person||'미지정').slice(0,30),note:String(x.note||'').slice(0,80),createdAt:i,deleted:false};const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(record)));const id='import-'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');await api.runTransaction(db,async tx=>{const ref=api.doc(db,'trips','europe-2026','expenses',id);if(!(await tx.get(ref)).exists())tx.set(ref,record)})}for(const [n,value]of Object.entries(legacyPlans)){if(!/^[1-9]$/.test(n)||!Array.isArray(value.rows))continue;await api.runTransaction(db,async tx=>{const ref=api.doc(db,'trips','europe-2026','days',n);if(!(await tx.get(ref)).exists())tx.set(ref,{rows:value.rows.slice(0,60),revision:1})})}localStorage.setItem('central-europe-2026-imported','true');importButton.hidden=true});message('기존 기록을 가져왔어요. 이미 공유된 일정은 유지했습니다.')}catch{}});
