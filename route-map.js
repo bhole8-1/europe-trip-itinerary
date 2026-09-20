@@ -1,7 +1,7 @@
 /* Geographic overview of the user's planned journey, not turn-by-turn routing. */
 (()=>{
 const el=document.querySelector('#journey-map'),message=document.querySelector('#map-message');
-if(!window.L){message.textContent='지도를 불러오지 못했어요. 아래 이동 순서 또는 지도 원본 링크를 확인해 주세요.';return}
+if(!window.L){document.querySelectorAll('[data-journey-day]').forEach(b=>b.disabled=true);message.textContent='지도를 불러오지 못했어요. 아래 이동 순서 또는 지도 원본 링크를 확인해 주세요.';return}
 const L=window.L;
 // Mondsee regional marker: official tourism coordinates, not an exact accommodation pin.
 const points={mondsee:[47.86,13.35],salzburg:[47.8095,13.055],vienna:[48.2082,16.3738],linz:[48.3069,14.2858],gosau:[47.584,13.534],hallstatt:[47.5622,13.6493],prague:[50.0755,14.4378]};
@@ -31,9 +31,29 @@ map.on('zoomend',()=>{if(map.getZoom()>=9)gosau.addTo(map);else map.removeLayer(
 const bounds=L.latLngBounds(Object.values(points));
 function fit(){map.fitBounds(bounds,{paddingTopLeft:[38,45],paddingBottomRight:[95,55],maxZoom:8})}
 fit();
-document.querySelectorAll('[data-map-leg]').forEach(button=>button.addEventListener('click',()=>{const index=Number(button.dataset.mapLeg),leg=legs[index];map.fitBounds(L.latLngBounds(leg.points),{padding:[65,65],maxZoom:9});lines[index].openPopup();document.querySelectorAll('[data-map-leg]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)))}));
-document.querySelector('#map-reset').addEventListener('click',()=>{map.closePopup();fit();document.querySelectorAll('[data-map-leg]').forEach(b=>b.setAttribute('aria-pressed','false'))});
-document.querySelector('#map-lakes').addEventListener('click',()=>{map.fitBounds(L.latLngBounds([points.mondsee,points.salzburg,points.gosau,points.hallstatt]),{padding:[70,70],maxZoom:10})});
+
+const daily=[
+ {name:'빈 도착',points:[points.vienna]},
+ {name:'빈 궁전과 예술 산책',points:[points.vienna]},
+ {name:'빈 → 몬드제',points:[points.vienna,points.mondsee]},
+ {name:'몬드제 ↔ 잘츠부르크',points:[points.mondsee,points.salzburg,points.mondsee]},
+ {name:'몬드제 → 고사우 → 할슈타트',points:[points.mondsee,points.gosau,points.hallstatt,points.mondsee]},
+ {name:'몬드제 → 린츠 → 프라하',points:[points.mondsee,points.linz,points.prague]},
+ {name:'프라하 성과 구시가지',points:[points.prague]},
+ {name:'프라하 도보 여행',points:[points.prague]},
+ {name:'프라하에서 귀국',points:[points.prague]}
+];
+let selectedDay=0,highlight=null,schedules=null;
+const detail=document.querySelector('#map-day-detail');
+function showSummary(){if(!selectedDay)return;const info=schedules?.[selectedDay-1];document.querySelector('#map-day-title').textContent='11.'+(12+selectedDay)+' · '+daily[selectedDay-1].name;document.querySelector('#map-day-summary').textContent=info?info.rows.filter(r=>r&&(r.time||r.place||r.note)).map(r=>[r.time,r.place||r.note].filter(Boolean).join(' · ')).join('\n'):'공유 일정을 불러오는 중입니다. 상세 일정에서도 확인할 수 있어요.';document.querySelector('#map-day-open').href='planner.html?day='+selectedDay;detail.hidden=false}
+window.addEventListener('journey-schedule',e=>{schedules=e.detail;showSummary()});
+function clearDay(){if(highlight){map.removeLayer(highlight);highlight=null}selectedDay=0;detail.hidden=true;lines.forEach(l=>l.setStyle({opacity:.85,weight:4}));document.querySelectorAll('[data-journey-day]').forEach(b=>b.setAttribute('aria-pressed','false'))}
+function selectDay(day,scroll){clearDay();selectedDay=day;const route=daily[day-1];map.closePopup();lines.forEach(l=>l.setStyle({opacity:.15,weight:3}));if(route.points.length>1)highlight=L.polyline(route.points,{color:'#b37925',weight:6,opacity:1}).addTo(map);else highlight=L.circleMarker(route.points[0],{radius:18,color:'#b37925',weight:4,fillOpacity:.12}).addTo(map);document.querySelectorAll('[data-map-leg]').forEach(b=>b.setAttribute('aria-pressed','false'));document.querySelectorAll('[data-journey-day]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.journeyDay)===day)));showSummary();if(scroll)document.querySelector('.map-section').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});map.invalidateSize();map.flyToBounds(L.latLngBounds(route.points),{padding:[55,55],maxZoom:route.points.length===1?12:9,duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:.8})}
+document.querySelectorAll('[data-journey-day]').forEach(b=>b.addEventListener('click',()=>selectDay(Number(b.dataset.journeyDay),!!b.closest('.passport'))));
+
+document.querySelectorAll('[data-map-leg]').forEach(button=>button.addEventListener('click',()=>{clearDay();const index=Number(button.dataset.mapLeg),leg=legs[index];map.fitBounds(L.latLngBounds(leg.points),{padding:[65,65],maxZoom:9});lines[index].openPopup();document.querySelectorAll('[data-map-leg]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)))}));
+document.querySelector('#map-reset').addEventListener('click',()=>{clearDay();map.closePopup();fit();document.querySelectorAll('[data-map-leg]').forEach(b=>b.setAttribute('aria-pressed','false'))});
+document.querySelector('#map-lakes').addEventListener('click',()=>{clearDay();map.fitBounds(L.latLngBounds([points.mondsee,points.salzburg,points.gosau,points.hallstatt]),{padding:[70,70],maxZoom:10})});
 if(window.ResizeObserver)new ResizeObserver(()=>map.invalidateSize()).observe(el);
 message.textContent='도시를 누르면 방문 날짜를 볼 수 있어요. 확대해서 호수 지역도 살펴보세요.';
 })();
