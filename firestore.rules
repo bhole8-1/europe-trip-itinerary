@@ -6,6 +6,10 @@ service cloud.firestore {
       allow create, update: if id.matches('(cheon|moon)_(passport|license|booking|insurance|roaming|money|charger|clothes|medicine|copies)')
         && request.resource.data.keys().hasOnly(['done','updatedAt'])
         && request.resource.data.done is bool && request.resource.data.updatedAt is number;
+      allow create, update: if id.matches('(cheon|moon)_custom_[a-zA-Z0-9-]{1,50}')
+        && request.resource.data.keys().hasOnly(['label','done','createdAt','updatedAt'])
+        && request.resource.data.label is string && request.resource.data.label.size() > 0 && request.resource.data.label.size() <= 80
+        && request.resource.data.done is bool && request.resource.data.createdAt is number && request.resource.data.updatedAt is number;
     }
     match /trips/europe-2026/tickets/{id} {
       allow read: if true;
