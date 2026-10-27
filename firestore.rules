@@ -1,6 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /trips/europe-2026/preparation/{id} {
+      allow read: if true;
+      allow create, update: if id.matches('(cheon|moon)_(passport|license|booking|insurance|roaming|money|charger|clothes|medicine|copies)')
+        && request.resource.data.keys().hasOnly(['done','updatedAt'])
+        && request.resource.data.done is bool && request.resource.data.updatedAt is number;
+    }
     match /trips/europe-2026/tickets/{id} {
       allow read: if true;
       allow create, update: if request.resource.data.keys().hasOnly(['category','title','date','time','place','status','url','memo','revision','deleted','updatedAt'])
