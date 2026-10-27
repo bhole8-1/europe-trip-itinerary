@@ -54,6 +54,7 @@ document.querySelectorAll('[data-journey-day]').forEach(b=>b.addEventListener('c
 document.querySelectorAll('[data-map-leg]').forEach(button=>button.addEventListener('click',()=>{clearDay();const index=Number(button.dataset.mapLeg),leg=legs[index];map.fitBounds(L.latLngBounds(leg.points),{padding:[65,65],maxZoom:9});lines[index].openPopup();document.querySelectorAll('[data-map-leg]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)))}));
 document.querySelector('#map-reset').addEventListener('click',()=>{clearDay();map.closePopup();fit();document.querySelectorAll('[data-map-leg]').forEach(b=>b.setAttribute('aria-pressed','false'))});
 document.querySelector('#map-lakes').addEventListener('click',()=>{clearDay();map.fitBounds(L.latLngBounds([points.mondsee,points.salzburg,points.gosau,points.hallstatt]),{padding:[70,70],maxZoom:10})});
+window.addEventListener('travel-screen',e=>{if(e.detail==='map'){map.invalidateSize();if(selectedDay)selectDay(selectedDay,false);else fit();}});
 if(window.ResizeObserver)new ResizeObserver(()=>map.invalidateSize()).observe(el);
 message.textContent='도시를 누르면 방문 날짜를 볼 수 있어요. 확대해서 호수 지역도 살펴보세요.';
 })();
