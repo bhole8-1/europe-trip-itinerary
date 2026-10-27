@@ -4,14 +4,20 @@ import {travelDay,directions,preparation,relevantTickets} from './trip-companion
 const $=s=>document.querySelector(s),select=$('#companion-day');
 let automatic=true,selected=travelDay().day,schedules=days.map(d=>({...d,rows:d.rows.map(([time,place,note])=>({time,place,note}))})),tickets=[],daysLive=false,ticketsLive=false;
 select.innerHTML=days.map((d,i)=>`<option value="${i+1}">11.${i+13} · ${esc(d.title)}</option>`).join('');
+$('#companion-days').innerHTML=days.map((d,i)=>`<button type="button" data-select-day="${i+1}" aria-pressed="false"><small>DAY ${String(i+1).padStart(2,'0')}</small><strong>${i+13}</strong><span>${['빈','빈','몬드제','잘츠부르크','호수 여행','프라하로','프라하','프라하','귀국'][i]}</span></button>`).join('');
+$('#companion-days').addEventListener('click',e=>{const b=e.target.closest('[data-select-day]');if(!b)return;automatic=false;selected=+b.dataset.selectDay;render()});
 const routeLink=(label,address)=>`<a class="companion-link" href="${esc(directions(address))}" target="_blank" rel="noopener noreferrer">${esc(label)} ↗</a>`;
+let renderedDay;
 function render(){
+ const openScenes=new Set([...document.querySelectorAll('.scene-note[open]')].map(x=>x.dataset.scene));
  const now=travelDay();if(automatic)selected=now.day;select.value=String(selected);
  $('#companion-mode').textContent=!automatic?'선택한 날짜 미리보기':now.phase==='before'?'출발 전 · 첫날 미리보기':now.phase==='after'?'여행의 마지막 날':'오늘의 여행';
- $('#companion-title').textContent=`DAY ${String(selected).padStart(2,'0')} · ${schedules[selected-1].title}`;
+ $('#companion-title').textContent=schedules[selected-1].title;
+ document.querySelectorAll('[data-select-day]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.selectDay===selected)));
  $('#companion-sync').textContent=`일정 ${daysLive?'실시간 연결':'기본/마지막 기록'} · 예약 ${ticketsLive?'실시간 연결':'연결 확인 중'}`;
- $('#companion-rows').innerHTML=schedules[selected-1].rows.map(r=>`<li><time>${esc(r.time||'시간 미정')}</time><div><strong>${esc(r.place||'장소 미정')}</strong>${r.note?`<p>${esc(r.note)}</p>`:''}</div></li>`).join('')||'<li>아직 등록한 일정이 없어요.</li>';
+ $('#companion-rows').innerHTML=schedules[selected-1].rows.map((r,i)=>`<li><time>${esc(r.time||'시간 미정')}</time><div><strong>${esc(r.place||'장소 미정')}</strong>${r.note?`<details class="scene-note" data-scene="${i}" ${renderedDay===selected&&openScenes.has(String(i))?'open':''}><summary>메모 보기</summary><p>${esc(r.note)}</p></details>`:''}</div></li>`).join('')||'<li>아직 등록한 일정이 없어요.</li>';
  const relevant=relevantTickets(tickets,selected);
+ $('#daily-ticket-count').textContent=`${relevant.length}건`;
  $('#companion-tickets').innerHTML=relevant.map(t=>`<article><span class="companion-badge" data-done="${t.status==='예약 완료'}">${esc(t.status)}</span><h4>${esc(t.title)}</h4><p>${esc(t.time)}</p><p>${esc(t.place)}</p>${safeLink(t.url)?`<a href="${esc(safeLink(t.url))}" target="_blank" rel="noopener noreferrer">예약 열기 ↗</a>`:'<a href="#reservations">예약 정보 확인 ↓</a>'}</article>`).join('')||'<p>이 날짜에 등록한 예약이 없어요. 아래 예약 모음에서 추가할 수 있어요.</p>';
  $('#companion-detail').href=`planner.html?day=${selected}`;
  const links=[];
@@ -25,6 +31,8 @@ function render(){
  if(selected===9)links.push(['프라하 공항','Václav Havel Airport Prague, Czechia']);
  $('#companion-directions').innerHTML=links.map(x=>routeLink(...x)).join('')||'<p>숙소 예약에 장소를 입력하면 길찾기가 표시돼요.</p>';
  $('#companion-transfer').hidden=selected!==6;
+ if(renderedDay!==selected){const rail=$('#companion-days'),active=rail.querySelector('[aria-pressed="true"]');if(active)rail.scrollLeft=Math.max(0,active.offsetLeft-rail.offsetLeft-rail.clientWidth/2+active.clientWidth/2);}
+ renderedDay=selected;
 }
 select.addEventListener('change',()=>{automatic=false;selected=+select.value;render()});
 $('#companion-today').addEventListener('click',()=>{automatic=true;render()});
@@ -38,7 +46,8 @@ setInterval(()=>{if(automatic)render()},60000);document.addEventListener('visibi
 const families=[['cheon','천가네'],['moon','문가네']];let checks={},ready=false,api,db,stop;const saving=new Set();
 function checklist(){
  const focused=document.activeElement?.dataset?.check;
- $('#preparation-grid').innerHTML=families.map(([id,name])=>{const done=preparation.filter(([key])=>checks[id+'_'+key]===true).length;return `<article class="family-preparation"><header><h3>${name}</h3><span>${done} / ${preparation.length} 준비 완료</span></header><progress max="${preparation.length}" value="${done}" aria-label="${name} 준비 진행률"></progress>${preparation.map(([key,label])=>{const doc=id+'_'+key;return `<label><input type="checkbox" data-check="${doc}" ${checks[doc]?'checked':''} ${!ready||saving.has(doc)||!navigator.onLine?'disabled':''}><span>${esc(label)}</span>${saving.has(doc)?'<small>저장 중</small>':''}</label>`}).join('')}</article>`}).join('');
+ const expanded=new Set([...document.querySelectorAll('[data-family][open]')].map(d=>d.dataset.family));
+ $('#preparation-grid').innerHTML=families.map(([id,name])=>{const done=preparation.filter(([key])=>checks[id+'_'+key]===true).length;return `<details class="family-preparation" data-family="${id}" ${expanded.has(id)?'open':''}><summary><div class="family-avatar">${id==='cheon'?'C':'M'}</div><div class="family-copy"><small>${id==='cheon'?'CHEON FAMILY':'MOON FAMILY'}</small><h3>${name}</h3><span>${done} / ${preparation.length} 준비 완료</span></div><span class="family-percent">${Math.round(done/preparation.length*100)}<small>%</small></span><b class="family-expand">＋</b></summary><progress max="${preparation.length}" value="${done}" aria-label="${name} 준비 진행률"></progress><div class="family-checks"><p class="family-hint">해당하지 않는 항목은 확인 후 완료로 표시하세요.</p>${preparation.map(([key,label])=>{const doc=id+'_'+key;return `<label><input type="checkbox" data-check="${doc}" ${checks[doc]?'checked':''} ${!ready||saving.has(doc)||!navigator.onLine?'disabled':''}><span>${esc(label)}</span>${saving.has(doc)?'<small>저장 중</small>':''}</label>`}).join('')}</div></details>`}).join('');
  if(focused)$('#preparation-grid').querySelector(`[data-check="${focused}"]`)?.focus();
 }
 const checkStatus=text=>$('#preparation-status').textContent=text;
